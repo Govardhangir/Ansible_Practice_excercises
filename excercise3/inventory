@@ -1,0 +1,30 @@
+all:
+  hosts:
+    web01:
+      ansible_host: 3.82.38.57
+
+    web02:
+      ansible_host: 54.242.200.124
+      ansible_user: ec2-user
+    db01:
+      ansible_host: 3.80.204.16
+
+  children:
+    webserver:
+      hosts:
+        web01:
+        web02:
+
+    dbserver:
+      hosts:
+        db01:
+
+dc_oregon:
+  children:
+    webserver:
+    dbserver:
+
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ./ram.pem
+    ansible_python_interpreter: /usr/bin/python3

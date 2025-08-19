@@ -1,0 +1,35 @@
+all:
+  hosts:
+    web01:
+      ansible_host: 3.82.38.57
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ./ram.pem
+      ansible_python_interpreter: /usr/bin/python3
+
+    web02:
+      ansible_host: 18.234.217.121
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ./ram.pem
+      ansible_python_interpreter: /usr/bin/python3
+
+    db01:
+      ansible_host: 3.80.204.16
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ./ram.pem
+      ansible_python_interpreter: /usr/bin/python3
+
+  children:
+    webserver:
+      hosts:
+        web01:
+        web02:
+
+    dbserver:
+      hosts:
+        db01:
+
+dc_oregon:
+  children:
+    webserver:
+    dbserver:
+
