@@ -1,8 +1,0 @@
-all:
-  hosts:
-    web01:
-      ansible_host: 3.82.38.57
-      ansible_user: ubuntu
-      ansible_ssh_private_key_file: /home/gova/ansible/ram.pem
-      ansible_python_interpreter: /usr/bin/python3
-

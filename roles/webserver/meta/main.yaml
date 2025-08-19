@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  author: "Giri"
+  description: "Role to deploy a static website (Apache) on CentOS/Ubuntu."
+  company: "Personal Project"
+dependencies: []

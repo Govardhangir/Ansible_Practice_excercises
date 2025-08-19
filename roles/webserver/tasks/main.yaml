@@ -1,0 +1,128 @@
+---
+- name: Set platform-specific variables
+  set_fact:
+    web_pkg: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    web_service: "{{ 'httpd' if ansible_os_family == 'RedHat' else 'apache2' }}"
+    web_user: "{{ 'apache' if ansible_os_family == 'RedHat' else 'www-data' }}"
+    site_zip_url: "{{ site_zip_map[ansible_distribution] | default(site_zip_map['Ubuntu']) }}"
+    tmp_dir: "/tmp/ansible_site"
+    web_root: "/var/www/html"
+
+- name: Ensure temporary directory exists
+  file:
+    path: "{{ tmp_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Ensure site_extracted directory exists
+  file:
+    path: "{{ tmp_dir }}/site_extracted"
+    state: directory
+    mode: '0755'
+
+- name: Ensure web root directory exists
+  file:
+    path: "{{ web_root }}"
+    state: directory
+    mode: '0755'
+
+- name: Ensure webserver package and unzip are installed
+  package:
+    name:
+      - "{{ web_pkg }}"
+      - unzip
+    state: present
+
+- name: Download website archive
+  get_url:
+    url: "{{ site_zip_url }}"
+    dest: "{{ tmp_dir }}/site.zip"
+    mode: '0644'
+    force: yes
+  register: download_result
+
+- name: Unarchive site to temporary location
+  unarchive:
+    src: "{{ tmp_dir }}/site.zip"
+    dest: "{{ tmp_dir }}/site_extracted"
+    remote_src: yes
+
+- name: Find extracted top-level directory
+  find:
+    paths: "{{ tmp_dir }}/site_extracted"
+    file_type: directory
+    depth: 1
+  register: extracted_dirs
+
+- name: Copy site files into web root
+  command: cp -a {{ item.path }}/. {{ web_root }}/
+  loop: "{{ extracted_dirs.files }}"
+  when: extracted_dirs.matched > 0
+  notify: Restart webserver
+
+- name: Ensure correct ownership on web root
+  file:
+    path: "{{ web_root }}"
+    owner: "{{ web_user }}"
+    group: "{{ web_user }}"
+    recurse: yes
+
+- name: Start and enable web service
+  service:
+    name: "{{ web_service }}"
+    state: started
+    enabled: yes
+
+# --- Firewall configuration ---
+- name: Configure firewall on RedHat (skip for Amazon Linux)
+  block:
+    - ansible.builtin.firewalld:
+        port: 80/tcp
+        permanent: yes
+        immediate: yes
+        state: enabled
+  rescue:
+    - debug:
+        msg: "firewalld module not available or failed; skipping firewall configuration"
+  when: ansible_os_family == 'RedHat' and ansible_distribution != 'Amazon'
+
+- name: Ensure UFW allows HTTP (Ubuntu/Debian)
+  ufw:
+    rule: allow
+    port: 80
+    proto: tcp
+  when: ansible_os_family == 'Debian'
+
+# --- SELinux configuration ---
+- name: Skip SELinux configuration for Amazon Linux
+  debug:
+    msg: "Skipping SELinux tasks on Amazon Linux"
+  when: ansible_distribution == 'Amazon'
+
+- name: If SELinux is enabled (RedHat only)
+  block:
+    - package:
+        name: policycoreutils-python-utils
+        state: present
+      ignore_errors: yes
+
+    - command: semanage fcontext -a -t httpd_sys_content_t "{{ web_root }}(/.*)?"
+      ignore_errors: yes
+
+    - command: restorecon -Rv "{{ web_root }}"
+      ignore_errors: yes
+  when: ansible_os_family == 'RedHat' and ansible_distribution != 'Amazon' and ansible_selinux.status == 'enabled'
+
+# --- Website verification ---
+- name: Verify website responds on localhost
+  uri:
+    url: "http://127.0.0.1"
+    status_code: 200
+    return_content: no
+  register: website_check
+  failed_when: website_check.status != 200
+
+- name: Show verification result
+  debug:
+    msg: "Website is up (HTTP {{ website_check.status }})"
+
